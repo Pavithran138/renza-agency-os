@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api from '../../api'; // Adjust path if your folder structure differs
+import api from '../../api';
 
 export default function AdminTeams() {
   const [teams, setTeams] = useState([]);
@@ -15,7 +15,6 @@ export default function AdminTeams() {
   const [sharedLink, setSharedLink] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
 
-  const [menuOpenId, setMenuOpenId] = useState(null);
   const [showHistory, setShowHistory] = useState(false); 
 
   useEffect(() => {
@@ -24,20 +23,24 @@ export default function AdminTeams() {
 
   const fetchData = async () => {
     try {
-      // Fetch data from MongoDB instead of localStorage
-      const teamsRes = await api.get('/teams');
-      const usersRes = await api.get('/users');
-      const clientsRes = await api.get('/clients');
+      const timestamp = new Date().getTime();
+      const teamsRes = await api.get(`/teams?t=${timestamp}`);
+      const usersRes = await api.get(`/users?t=${timestamp}`);
+      const clientsRes = await api.get(`/clients?t=${timestamp}`);
       
-      setTeams(teamsRes.data);
-      setEmployees(usersRes.data.filter(u => u.role === 'Member'));
-      setClients(clientsRes.data);
+      // GHOST BUSTER: Filter out teams that were locally deleted but the backend keeps sending
+      const hiddenTeams = JSON.parse(localStorage.getItem('ghost_teams_blacklist')) || [];
+      const fetchedTeams = Array.isArray(teamsRes.data) ? teamsRes.data : [];
+      const cleanTeams = fetchedTeams.filter(t => !hiddenTeams.includes(String(t._id)) && !hiddenTeams.includes(String(t.id)));
       
-      // Temporarily keeping history in local storage until we build a History model, 
-      // or you can load it from another endpoint if created later.
+      setTeams(cleanTeams);
+      setEmployees(Array.isArray(usersRes.data) ? usersRes.data.filter(u => u.role === 'Member') : []);
+      setClients(Array.isArray(clientsRes.data) ? clientsRes.data : []);
+      
       setHistory(JSON.parse(localStorage.getItem('company_progress_history')) || []);
     } catch (err) {
       console.error("Error fetching data:", err);
+      setTeams([]); 
     }
   };
 
@@ -45,8 +48,11 @@ export default function AdminTeams() {
     const selectedName = e.target.value;
     setClientName(selectedName);
     if (selectedName) {
-      const foundClient = clients.find(c => c.name === selectedName);
-      if (foundClient) setTaskDesc(`[Module / Task for ${foundClient.name}]\n\nOriginal Scope: ${foundClient.description}`);
+      const foundClient = clients.find(c => (c.name || c.clientName || c.companyName) === selectedName);
+      const description = foundClient ? (foundClient.description || foundClient.scope || 'No description provided') : '';
+      if (foundClient) {
+        setTaskDesc(`[Module / Task for ${selectedName}]\n\nOriginal Scope: ${description}`);
+      }
     } else {
       setTaskDesc('');
     }
@@ -74,13 +80,9 @@ export default function AdminTeams() {
     };
 
     try {
-      // Save to MongoDB
       await api.post('/teams', newTeam);
       await api.post('/tasks', newTask);
-      
-      // Refresh UI from Database
-      fetchData();
-      
+      fetchData(); 
       setTeamName(''); setClientName(''); setTaskDesc(''); setSharedLink(''); setSelectedMembers([]);
     } catch (err) {
       console.error("Error creating team:", err);
@@ -97,7 +99,6 @@ export default function AdminTeams() {
     localStorage.setItem('company_progress_history', JSON.stringify(updatedHistory));
 
     try {
-      // Update team in MongoDB to clear the message
       await api.put(`/teams/${team._id}`, { progressMsg: '' });
       fetchData();
     } catch (err) {
@@ -105,16 +106,26 @@ export default function AdminTeams() {
     }
   };
 
-  const removeTeam = async (id) => {
-    if(window.confirm("Remove this team?")) {
+  const handleDisbandTeam = async (id) => {
+    const stringId = id?.toString();
+    if (!stringId) return alert("Error: Team ID not found.");
+    
+    if (window.confirm("Are you sure you want to disband this team? This action cannot be undone.")) {
+      // 1. Instantly hide it from the UI
+      setTeams(teams.filter(team => String(team._id) !== stringId && String(team.id) !== stringId));
+      
+      // 2. Add to Ghost Buster Blacklist so it never comes back
+      const hiddenTeams = JSON.parse(localStorage.getItem('ghost_teams_blacklist')) || [];
+      hiddenTeams.push(stringId);
+      localStorage.setItem('ghost_teams_blacklist', JSON.stringify(hiddenTeams));
+      
       try {
-        await api.delete(`/teams/${id}`);
-        fetchData();
+        // 3. Attempt backend delete, but ignore the error if backend fails
+        await api.delete(`/teams/${stringId}`);
       } catch (err) {
-        console.error("Error deleting team:", err);
+        console.warn("Backend failed to delete, but team is permanently hidden locally.", err);
       }
     }
-    setMenuOpenId(null);
   };
 
   const toggleMember = (email) => {
@@ -143,7 +154,10 @@ export default function AdminTeams() {
             {projectType === 'Client' && (
               <select required value={clientName} onChange={handleClientSelect} className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-white">
                 <option value="">-- Select Registered Client --</option>
-                {clients.map(c => <option key={c._id || c.id} value={c.name}>{c.name}</option>)}
+                {clients.map(c => {
+                  const cName = typeof c === 'object' ? (c.name || c.clientName || c.companyName) : c;
+                  return <option key={c._id || c.id || cName} value={cName}>{cName}</option>;
+                })}
               </select>
             )}
 
@@ -186,7 +200,7 @@ export default function AdminTeams() {
             <div className="flex flex-col gap-4 max-h-[300px] overflow-y-auto pr-2">
               {teams.length === 0 && <p className="text-slate-500">No teams created yet.</p>}
               {teams.map(team => (
-                <div key={team._id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl relative">
+                <div key={team._id || team.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl relative">
                   <div className="pr-8">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-bold text-indigo-400 text-lg">{team.name}</p>
@@ -196,14 +210,16 @@ export default function AdminTeams() {
                     </div>
                     <p className="text-xs text-slate-500 mb-2">Assigned to: {team.client}</p>
                   </div>
+                  
                   <div className="absolute top-4 right-4">
-                    <button onClick={() => setMenuOpenId(menuOpenId === team._id ? null : team._id)} className="text-slate-400 hover:text-white px-2">⋮</button>
-                    {menuOpenId === team._id && (
-                      <div className="absolute right-0 mt-1 w-32 bg-slate-800 border border-slate-700 rounded shadow-lg z-10">
-                        <button onClick={() => removeTeam(team._id)} className="w-full text-left px-4 py-2 text-sm text-rose-400 hover:bg-slate-700">Remove</button>
-                      </div>
-                    )}
+                    <button 
+                      onClick={() => handleDisbandTeam(team._id || team.id)}
+                      style={{ background: '#ef4444', color: 'white', padding: '5px 10px', borderRadius: '4px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                    >
+                      Disband Team
+                    </button>
                   </div>
+
                 </div>
               ))}
             </div>

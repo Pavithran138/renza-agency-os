@@ -47,7 +47,12 @@ router.post('/teams', async (req, res) => {
 
 router.put('/teams/:id', async (req, res) => {
   try {
-    const updatedTeam = await Team.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // FIXED: Removed { new: true }, replaced with { returnDocument: 'after' }
+    const updatedTeam = await Team.findByIdAndUpdate(
+      req.params.id, 
+      { $set: req.body }, 
+      { returnDocument: 'after' }
+    );
     res.json(updatedTeam);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -78,7 +83,7 @@ router.post('/clients', async (req, res) => {
 });
 
 // ==========================================
-// TASK ROUTES
+// TASK ROUTES (CHAT SYNC FIX)
 // ==========================================
 router.get('/tasks', async (req, res) => {
   try {
@@ -97,7 +102,12 @@ router.post('/tasks', async (req, res) => {
 
 router.put('/tasks/:id', async (req, res) => {
   try {
-    const updatedTask = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // FIXED: Added $set to save chat messages, replaced { new: true }
+    const updatedTask = await Task.findByIdAndUpdate(
+      req.params.id, 
+      { $set: req.body }, 
+      { returnDocument: 'after' }
+    );
     res.json(updatedTask);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

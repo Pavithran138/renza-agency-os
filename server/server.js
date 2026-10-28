@@ -7,6 +7,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Removes strictQuery warnings if they pop up
+mongoose.set('strictQuery', false);
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB Connected successfully'))
   .catch(err => console.log('MongoDB connection error:', err));
@@ -25,6 +28,10 @@ app.get('/api/users', async (req, res) => { try { res.json(await User.find()); }
 app.get('/api/teams', async (req, res) => { try { res.json(await Team.find()); } catch(e) { res.status(500).json({error: e.message}); } });
 app.get('/api/clients', async (req, res) => { try { res.json(await Client.find()); } catch(e) { res.status(500).json({error: e.message}); } });
 app.get('/api/tasks', async (req, res) => { try { res.json(await Task.find()); } catch(e) { res.status(500).json({error: e.message}); } });
+
+// NEW: Required for the Real-Time Chat Sync to fetch a single task's messages
+app.get('/api/tasks/:id', async (req, res) => { try { res.json(await Task.findById(req.params.id)); } catch(e) { res.status(500).json({error: e.message}); } });
+
 app.get('/api/files', async (req, res) => { try { res.json(await File.find()); } catch(e) { res.status(500).json({error: e.message}); } });
 app.get('/api/chats', async (req, res) => { try { res.json(await Chat.find()); } catch(e) { res.status(500).json({error: e.message}); } });
 
@@ -39,14 +46,31 @@ app.post('/api/files', async (req, res) => { try { res.status(201).json(await Fi
 app.post('/api/chats', async (req, res) => { try { res.status(201).json(await Chat.create(req.body)); } catch(e) { res.status(400).json({error: e.message}); } });
 
 // ==========================================
-// PUT & DELETE ROUTES
+// PUT ROUTES (FIXED WARNINGS & ADDED $set FOR CHAT)
 // ==========================================
-app.put('/api/tasks/:id', async (req, res) => { try { res.json(await Task.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch(e) { res.status(400).json({error: e.message}); } });
-app.put('/api/teams/:id', async (req, res) => { try { res.json(await Team.findByIdAndUpdate(req.params.id, req.body, { new: true })); } catch(e) { res.status(400).json({error: e.message}); } });
+app.put('/api/tasks/:id', async (req, res) => { 
+  try { 
+    res.json(await Task.findByIdAndUpdate(req.params.id, { $set: req.body }, { returnDocument: 'after' })); 
+  } catch(e) { 
+    res.status(400).json({error: e.message}); 
+  } 
+});
 
+app.put('/api/teams/:id', async (req, res) => { 
+  try { 
+    res.json(await Team.findByIdAndUpdate(req.params.id, { $set: req.body }, { returnDocument: 'after' })); 
+  } catch(e) { 
+    res.status(400).json({error: e.message}); 
+  } 
+});
+
+// ==========================================
+// DELETE ROUTES (ADDED MISSING TEAM DELETE)
+// ==========================================
+app.delete('/api/teams/:id', async (req, res) => { try { await Team.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch(e) { res.status(400).json({error: e.message}); } });
 app.delete('/api/tasks/:id', async (req, res) => { try { await Task.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch(e) { res.status(400).json({error: e.message}); } });
 app.delete('/api/clients/:id', async (req, res) => { try { await Client.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch(e) { res.status(400).json({error: e.message}); } });
 app.delete('/api/users/:id', async (req, res) => { try { await User.findByIdAndDelete(req.params.id); res.json({ message: 'Deleted' }); } catch(e) { res.status(400).json({error: e.message}); } });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

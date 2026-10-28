@@ -1,59 +1,72 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 // Layouts
 import AdminLayout from './layouts/AdminLayout';
 import MemberLayout from './layouts/MemberLayout';
 
-// Auth
-import Login from './pages/Login'; // Make sure this path matches your Login file location
+// Public Page
+import Login from './pages/Login';
 
 // Admin Pages
 import AdminHome from './pages/admin/AdminHome';
 import AdminClients from './pages/admin/AdminClients';
-import AdminTeams from './pages/admin/AdminTeams';
 import AdminTasks from './pages/admin/AdminTasks';
-import AdminRepo from './pages/admin/AdminRepo';
+import AdminTeams from './pages/admin/AdminTeams';
 import AdminChat from './pages/admin/AdminChat';
-import AdminDirectory from './pages/admin/AdminDirectory';
+import AdminDirectory from './pages/admin/AdminDirectory'; 
 
 // Member Pages
 import MemberHome from './pages/member/MemberHome';
-import MemberClients from './pages/member/MemberClients'; // <-- New Import
-import MemberTeam from './pages/member/MemberTeam';
+import MemberClients from './pages/member/MemberClients';
 import MemberTasks from './pages/member/MemberTasks';
-import MemberRepo from './pages/member/MemberRepo';
+import MemberTeam from './pages/member/MemberTeam';
 import MemberChat from './pages/member/MemberChat';
+import MemberRepo from './pages/member/MemberRepo';
 
-export default function App() {
+// Components
+import TeamProgressChat from './components/TeamProgressChat';
+import AdminRepo from './pages/admin/AdminRepo';
+
+const App = () => {
   return (
     <Router>
       <Routes>
+        {/* Public Login Route */}
         <Route path="/" element={<Login />} />
 
-        {/* Admin Routes */}
+        {/* Admin Routes with Sidebar Layout */}
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminHome />} />
+          {/* Automatically redirect /admin to /admin/home so it is never blank */}
+          <Route index element={<Navigate to="home" replace />} />
+          
+          <Route path="home" element={<AdminHome />} />
           <Route path="clients" element={<AdminClients />} />
-          <Route path="teams" element={<AdminTeams />} />
           <Route path="tasks" element={<AdminTasks />} />
-          <Route path="repo" element={<AdminRepo />} />
+          <Route path="teams" element={<AdminTeams />} />
           <Route path="chat" element={<AdminChat />} />
           <Route path="directory" element={<AdminDirectory />} />
+          <Route path="repo" element={<AdminRepo />} />
+          <Route path="tasks/progress/:taskId" element={<TeamProgressChat />} />
         </Route>
 
-        {/* Member Routes */}
+        {/* Member Routes with Sidebar Layout */}
         <Route path="/member" element={<MemberLayout />}>
-          <Route index element={<MemberHome />} />
-          <Route path="clients" element={<MemberClients />} /> {/* <-- New Route */}
-          <Route path="teams" element={<MemberTeam />} />
+          {/* Automatically redirect /member to /member/home so it is never blank */}
+          <Route index element={<Navigate to="home" replace />} />
+          
+          <Route path="home" element={<MemberHome />} />
+          <Route path="clients" element={<MemberClients />} />
           <Route path="tasks" element={<MemberTasks />} />
-          <Route path="repo" element={<MemberRepo />} />
+          <Route path="teams" element={<MemberTeam />} />
           <Route path="chat" element={<MemberChat />} />
+          <Route path="repo" element={<MemberRepo />} />
+          
+          <Route path="tasks/progress/:taskId" element={<TeamProgressChat />} />
         </Route>
-
-        {/* Fallback route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
-}
+};
+
+export default App;
