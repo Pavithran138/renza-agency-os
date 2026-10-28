@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  // Pointing to your live Render backend
+  baseURL: 'https://renza-agency.onrender.com/api', 
 });
 
 export default api;
